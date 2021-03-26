@@ -50,6 +50,10 @@ def initialize_parameters(n_x, n_h, n_y):
 					"b2": np.zeros((n_y, 1))}
 	return parameters
 
+def softmax(z):
+	epsilon = 1e-6
+	return (np.exp(z)/np.sum(np.exp(z) + epsilon, axis=0, keepdims=True))
+
 def sigmoid(x):
 	s = 1/(1+np.exp(-x))
 	return s
@@ -66,18 +70,18 @@ def drelu(dA, Z):
 
 def linear_activation_forward(A_prev, W, B, func):
 	Z = np.dot(W,A_prev) + B
-	if func == 'sigmoid':
-		A = sigmoid(Z)
+	if func == 'softmax':
+		A = softmax(Z)
 	elif func == 'relu':
 		A = np.maximum(Z,0)
 	cache = (A_prev,W,B,Z)
 	return A, cache
 
-def linear_activation_backward(dA, cache, func):
+def linear_activation_backward(dA, AL, Y, cache, func):
 	A_prev,W,B,Z = cache
 	m = A_prev.shape[1]
-	if func == 'sigmoid':
-		dZ = dsigmoid(dA, Z)
+	if func == 'softmax':
+		dZ = AL - Y
 	elif func == 'relu':
 		dZ = drelu(dA, Z)
 	dW = (1/m) * np.dot(dZ, A_prev.T)
@@ -111,14 +115,14 @@ def nn_model(X, Y, X_test, Y_test, n_x, n_h, n_y, parameters):
 	val_loss = []
 	for i in range(0, epoch):
 		A1, cache1 = linear_activation_forward(X, W1, b1, 'relu')
-		A2, cache2 = linear_activation_forward(A1, W2, b2, 'sigmoid')
+		A2, cache2 = linear_activation_forward(A1, W2, b2, 'softmax')
 		A1_test, _ = linear_activation_forward(X_test, W1, b1, 'relu')
-		A2_test, _ = linear_activation_forward(A1_test, W2, b2, 'sigmoid')
+		A2_test, _ = linear_activation_forward(A1_test, W2, b2, 'softmax')
 		cost = compute_cost(A2, Y, epsilon)
 		loss = compute_cost(A2_test, Y_test, epsilon)
 		dA2 = -(np.divide(Y, A2 + epsilon) - np.divide(1 - Y, 1 - A2 + epsilon))
-		dA1, dW2, db2 = linear_activation_backward(dA2, cache2, 'sigmoid')
-		dA0, dW1, db1 = linear_activation_backward(dA1, cache1, 'relu')
+		dA1, dW2, db2 = linear_activation_backward(dA2, A2, Y, cache2, 'softmax')
+		dA0, dW1, db1 = linear_activation_backward(dA1, A2, Y, cache1, 'relu')
 		grads['dW1'] = dW1
 		grads['db1'] = db1
 		grads['dW2'] = dW2
@@ -149,7 +153,7 @@ def predict(X, Y, parameters):
 	W2 = parameters['W2']
 	b2 = parameters['b2']
 	A1, _ = linear_activation_forward(X, W1, b1, 'relu')
-	yhat, _ = linear_activation_forward(A1, W2, b2, 'sigmoid')
+	yhat, _ = linear_activation_forward(A1, W2, b2, 'softmax')
 	yhat = np.where(yhat > 0.5, 1, 0)
 	result = (yhat == Y).mean()
 	return result, yhat
@@ -170,8 +174,12 @@ if __name__ == "__main__":
 		n_x, n_h, n_y = layer_sizes(X_train, Y_train)
 		parameters = initialize_parameters(n_x, n_h, n_y)
 		parameters = nn_model(X_train, Y_train, X_test, Y_test, n_x, n_h, n_y, parameters)
-		with open('parameters.pkl', 'wb') as output:
-			pickle.dump(parameters, output)
+		try:
+			with open('parameters.pkl', 'wb') as output:
+				pickle.dump(parameters, output)
+		except:
+			print("Something's wrong with the paremeters.pkl file")
+			exit(1)
 		prediction_print(X_train, Y_train, parameters, True)
 		prediction_print(X_test, Y_test, parameters, False)
 	elif options.mode == "prediction":
@@ -185,8 +193,12 @@ if __name__ == "__main__":
 		X = np.array(data.iloc[:,2:])
 		X = Normalize_data(X)
 		X = X.T
-		with open('parameters.pkl', 'rb') as output:
-			parameters = pickle.load(output)
+		try:
+			with open('parameters.pkl', 'rb') as output:
+				parameters = pickle.load(output)
+		except:
+			print("Something's wrong with the paremeters.pkl file")
+			exit(1)
 		accuracy, yhat = predict(X, Y, parameters)
 		print("{} accuracy on the given data set".format("%.2f" % (accuracy * 100)))
 		tn, fp, fn, tp = confusion_matrix(np.squeeze(yhat), np.squeeze(Y)).ravel()
